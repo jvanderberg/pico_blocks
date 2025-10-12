@@ -1,12 +1,12 @@
 # Pico Blocks
 
-A classic arcade breakout game written in MMBasic for the Raspberry Pi Pico (PicoMite). Features smooth 20+ FPS gameplay using hardware framebuffers, multiple block types, 10 progressive levels, and arcade-style physics.
+A classic arcade breakout game written in MMBasic for the ClockworkPi PicoCalc. Features smooth 20+ FPS gameplay using hardware framebuffers, multiple block types, 10 progressive levels, and arcade-style physics.
 
 ## Gameplay
 
 ![Pico Blocks Screenshot](screenshot.png)
 
-*Screenshot showing Level 1 with color-coded blocks: 🟥 Red (30pts), 🟧 Orange (20pts), 🟨 Yellow (10pts, 2 hits), 🟦 Blue (indestructible)*
+*Screenshot showing a level with color-coded blocks: 🟥 Red (30pts), 🟧 Orange (20pts), 🟨 Yellow (10pts, 2 hits), 🟦 Blue (indestructible)*
 
 ## Features
 
@@ -19,10 +19,6 @@ A classic arcade breakout game written in MMBasic for the Raspberry Pi Pico (Pic
   - Yellow: 10 points, 2 hits to destroy (changes color when damaged)
   - Blue: Indestructible obstacles
 - **10 Progressive Levels**: DATA-based layouts, easily editable
-- **Explosion Animations**: Visual feedback when blocks are destroyed
-- **Collision Timeout**: Prevents rapid repeated hits on same block
-- **3D Visual Effects**: Highlights on paddle, ball, and blocks
-- **Performance Optimized**: HUD only redraws on score/lives change
 
 ## Controls
 
@@ -31,7 +27,6 @@ A classic arcade breakout game written in MMBasic for the Raspberry Pi Pico (Pic
 - **Space**: Launch ball
 - **P**: Save screenshot (saves as screen1.bmp, screen2.bmp, etc.)
 - **ESC**: Quit game
-- **1-8 Keys**: Play musical tones
 
 ## Level Design
 
@@ -59,7 +54,6 @@ To start at a specific level, change `currentLevel%=1` near the top of the code.
 Built using MMBasic's hardware framebuffer system for flicker-free rendering:
 - Framebuffer F: Static background (blocks, HUD)
 - Layer L: Dynamic sprites (paddle, ball)
-- Continuous merge at ~26 FPS (38ms refresh)
 - AABB collision detection with timeout system
 - State-based explosion animations
 
