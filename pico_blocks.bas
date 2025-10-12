@@ -11,7 +11,6 @@ CONST PAD_ACCEL = 2.0
 CONST PAD_DECAY = 0.88
 CONST PAD_MAX   = 24
 CONST BRADIUS   = 6
-CONST BALL_PAD  = 4
 CONST BALL_SPEED_INIT = 3.0
 CONST BALL_SPEED_ACCEL_PER_SEC = 0.03
 CONST PADDLE_KICK = 0.2
@@ -24,11 +23,9 @@ CONST HUDH% = 18
 
 CONST COL_BG%     = RGB(BLACK)
 CONST COL_TXT%    = RGB(WHITE)
-CONST COL_GRID%   = &H888888
 CONST COL_BORDER% = RGB(MYRTLE)
 CONST COL_PAD%    = RGB(GREEN)
 CONST COL_BALL%   = RGB(RED)
-CONST COL_BLOCK%  = RGB(CYAN)
 
 ' ---- Block layout ----
 CONST LEVELS% = 10
@@ -109,7 +106,7 @@ DATA "B","Y","Y","0","0","Y","Y","B"
 DATA "R","B","O","B","O","B","O","R"
 
 ' ---- State ----
-DIM INTEGER currentLevel%=10
+DIM INTEGER currentLevel%=1
 DIM FLOAT bx!, by!
 DIM INTEGER br%
 DIM FLOAT vx!, vy!
@@ -136,12 +133,37 @@ SUB BeepWall(): PLAY TONE 600,600 : PAUSE 20 : PLAY STOP : END SUB
 SUB BeepBlock(): PLAY TONE 1200,1200 : PAUSE 25 : PLAY STOP : END SUB
 SUB BeepMiss(): PLAY TONE 200,200 : PAUSE 80 : PLAY STOP : END SUB
 
-
-' ---- Drawing helpers ----
-SUB DrawStatic()
-  CLS COL_BG%
+SUB ResetBall()
+  ' Reset ball to paddle position (not launched)
+  ballLaunched% = 0
+  bx! = px! + pw%/2 - br%
+  by! = py! - 2*br% - 2
+  IF RND > 0.5 THEN vx! = BALL_SPEED_INIT ELSE vx! = -BALL_SPEED_INIT
+  vy! = -BALL_SPEED_INIT
+  lastAccelTime% = TIMER
+  hitTimeout% = 0
 END SUB
 
+SUB DestroyBlock(r%, c%, points%)
+  ' Destroy a block with explosion and award points
+  LOCAL bx%, by%
+  bx% = GetBlockX(c%)
+  by% = GetBlockY(r%)
+  TriggerExplosion bx%, by%, BLOCK_W%, BLOCK_H%, GetBlockColor(blocks%(r%, c%))
+  blocks%(r%, c%) = 0
+  blocksLeft% = blocksLeft% - 1
+  score% = score% + points%
+  EraseBlock r%, c%
+END SUB
+
+SUB Draw3DHighlight(x%, y%, w%, h%)
+  ' Draw white highlight on top and left edges for 3D effect
+  LINE x%, y%, x%+w%-1, y%, , RGB(WHITE)  ' Top edge
+  LINE x%, y%, x%, y%+h%-1, , RGB(WHITE)  ' Left edge
+END SUB
+
+
+' ---- Drawing helpers ----
 SUB DrawHUD()
   LOCAL s$
   s$ = "L" + STR$(currentLevel%) + " Score " + STR$(score%) + " Lives " + STR$(lives%)
@@ -154,9 +176,7 @@ END SUB
 SUB DrawPaddleAt(x%, y%)
   ' Draw main paddle
   BOX x%, y%, pw%, ph%, 0, , COL_PAD%
-  ' Draw highlight on top and left edges for 3D effect
-  LINE x%, y%, x%+pw%-1, y%, , RGB(WHITE)  ' Top edge
-  LINE x%, y%, x%, y%+ph%-1, , RGB(WHITE)  ' Left edge
+  Draw3DHighlight x%, y%, pw%, ph%
 END SUB
 
 SUB DrawBallAt(x%, y%)
@@ -278,9 +298,7 @@ SUB DrawBlocks()
         by% = GetBlockY(r%)
         BOX bx%, by%, BLOCK_W%, BLOCK_H%, 0, , GetBlockColor(blockType%)
         BOX bx%, by%, BLOCK_W%, BLOCK_H%, 1, COL_BORDER%
-        ' Draw highlight on top and left edges for 3D effect
-        LINE bx%+1, by%+1, bx%+BLOCK_W%-2, by%+1, , RGB(WHITE)  ' Top edge
-        LINE bx%+1, by%+1, bx%+1, by%+BLOCK_H%-1, , RGB(WHITE)  ' Left edge
+        Draw3DHighlight bx%+1, by%+1, BLOCK_W%-2, BLOCK_H%-1
       END IF
     NEXT
   NEXT
@@ -338,31 +356,17 @@ FUNCTION CheckBlockCollision(ballX%, ballY%, ballR%) AS INTEGER
             FRAMEBUFFER WRITE F
             BOX bx%, by%, BLOCK_W%, BLOCK_H%, 0, , GetBlockColor(BLOCK_YELLOW_DMG%)
             BOX bx%, by%, BLOCK_W%, BLOCK_H%, 1, COL_BORDER%
-            ' Draw highlight on top and left edges for 3D effect
-            LINE bx%+1, by%+1, bx%+BLOCK_W%-2, by%+1, , RGB(WHITE)  ' Top edge
-            LINE bx%+1, by%+1, bx%+1, by%+BLOCK_H%-1, , RGB(WHITE)  ' Left edge
+            Draw3DHighlight bx%+1, by%+1, BLOCK_W%-2, BLOCK_H%-1
             FRAMEBUFFER WRITE L
           ELSE IF blockType% = BLOCK_YELLOW_DMG% THEN
             ' Yellow block damaged - destroy it, award 10 points
-            TriggerExplosion bx%, by%, BLOCK_W%, BLOCK_H%, GetBlockColor(blockType%)
-            blocks%(r%, c%) = 0
-            blocksLeft% = blocksLeft% - 1
-            score% = score% + 10
-            EraseBlock r%, c%
+            DestroyBlock r%, c%, 10
           ELSE IF blockType% = BLOCK_ORANGE% THEN
             ' Orange block - destroy, award 20 points
-            TriggerExplosion bx%, by%, BLOCK_W%, BLOCK_H%, GetBlockColor(blockType%)
-            blocks%(r%, c%) = 0
-            blocksLeft% = blocksLeft% - 1
-            score% = score% + 20
-            EraseBlock r%, c%
+            DestroyBlock r%, c%, 20
           ELSE IF blockType% = BLOCK_RED% THEN
             ' Red block - destroy, award 30 points
-            TriggerExplosion bx%, by%, BLOCK_W%, BLOCK_H%, GetBlockColor(blockType%)
-            blocks%(r%, c%) = 0
-            blocksLeft% = blocksLeft% - 1
-            score% = score% + 30
-            EraseBlock r%, c%
+            DestroyBlock r%, c%, 30
           END IF
           CheckBlockCollision = 1
           EXIT FUNCTION
@@ -407,7 +411,7 @@ FRAMEBUFFER LAYER RGB(BLACK) ' Create layer L with black as transparent
 
 ' Draw static background to F
 FRAMEBUFFER WRITE F
-DrawStatic
+CLS COL_BG%
 DrawBlocks
 
 ' Draw initial sprites to layer L
@@ -436,15 +440,11 @@ DO
       CASE  32: IF ballLaunched% = 0 THEN ballLaunched% = 1 : BeepServe
       CASE  27: EXIT DO
       CASE 80, 112: ' P or p key - screenshot
-        ' Debug beeps to track progress
-        PLAY TONE 400,400 : PAUSE 40 : PLAY STOP  ' Starting
+        ' Pause rendering and capture full scene
         FRAMEBUFFER MERGE RGB(BLACK), A  ' Abort continuous merge
-        PAUSE 100
-        PLAY TONE 600,600 : PAUSE 40 : PLAY STOP  ' Merge aborted
-        ' Redraw everything to N buffer manually
+        PAUSE 50
         FRAMEBUFFER WRITE N
         CLS COL_BG%
-        DrawStatic
         DrawBlocks
         DrawHUD
         DrawPaddleAt INT(px!), INT(py!)
@@ -452,15 +452,13 @@ DO
         IF ballLaunched% = 0 THEN
           TEXT W%\2, H%\2, "Hit SPACE to start", "CT", , , COL_TXT%, RGB(BLACK)
         END IF
-        PAUSE 100
-        PLAY TONE 800,800 : PAUSE 40 : PLAY STOP  ' Redraw done
+        PAUSE 50
         screenshotNum% = screenshotNum% + 1
         SAVE IMAGE "screen" + STR$(screenshotNum%) + ".bmp"
-        PAUSE 100
-        PLAY TONE 1000,1000 : PAUSE 40 : PLAY STOP  ' Save complete
-        FRAMEBUFFER WRITE L  ' Back to layer
+        PAUSE 50
+        FRAMEBUFFER WRITE L
         FRAMEBUFFER MERGE RGB(BLACK), R, TICK_MS  ' Resume continuous merge
-        PLAY TONE 1200,1200 : PAUSE 40 : PLAY STOP  ' Merge resumed
+        PLAY TONE 1200,1200 : PAUSE 30 : PLAY STOP  ' Confirmation beep
       CASE  49 TO 56
         PLAY TONE 220 * (2 ^ ((ASC(k$)-48)/12.0)), 0 : PAUSE 60 : PLAY STOP
     END SELECT
@@ -548,13 +546,7 @@ DO
 
     IF lives% > 0 THEN
       ' Reset ball to paddle (not launched)
-      ballLaunched% = 0
-      bx! = px! + pw%/2 - br%
-      by! = py! - 2*br% - 2
-      IF RND > 0.5 THEN vx! = BALL_SPEED_INIT ELSE vx! = -BALL_SPEED_INIT
-      vy! = -BALL_SPEED_INIT
-      lastAccelTime% = TIMER
-      hitTimeout% = 0
+      ResetBall
       BeepServe
     ELSE
       ' Game over
@@ -572,17 +564,11 @@ DO
     IF currentLevel% < LEVELS% THEN
       ' Advance to next level
       currentLevel% = currentLevel% + 1
-      ballLaunched% = 0
-      bx! = px! + pw%/2 - br%
-      by! = py! - 2*br% - 2
-      IF RND > 0.5 THEN vx! = BALL_SPEED_INIT ELSE vx! = -BALL_SPEED_INIT
-      vy! = -BALL_SPEED_INIT
-      lastAccelTime% = TIMER
-      hitTimeout% = 0
+      ResetBall
 
       ' Redraw static background with new level
       FRAMEBUFFER WRITE F
-      DrawStatic
+      CLS COL_BG%
       InitBlocks
       DrawBlocks
       DrawHUD
