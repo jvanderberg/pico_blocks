@@ -1,8 +1,8 @@
 ' ==========================================
-' PicoCalc Pong Demo (with proper double buffering)
-' - Paddle inertia/acceleration
-' - Flicker-free via FRAMEBUFFER double buffering
-' - No MAX(); use IF clamp for pw%
+' PicoCalc Blocks Game (with FRAMEBUFFER)
+' - True double buffering using FRAMEBUFFER + LAYER
+' - Static background on F, dynamic sprites on L
+' - FRAMEBUFFER MERGE for flicker-free display
 ' ==========================================
 OPTION EXPLICIT
 
@@ -15,7 +15,7 @@ CONST BALL_PAD  = 4
 CONST BALL_SPEED_INIT = 2.0
 CONST BALL_SPEED_ACCEL_PER_SEC = 0.03
 CONST PADDLE_KICK = 0.5
-CONST TICK_MS   = 16
+CONST TICK_MS   = 38
 
 ' ---- Screen & colors ----
 CONST W% = MM.HRES
@@ -50,8 +50,6 @@ DIM fps$
 DIM k$
 DIM INTEGER blocks%(BLOCK_ROWS%-1, BLOCK_COLS%-1)
 DIM INTEGER totalBlocks%, blocksLeft%
-DIM INTEGER oldBx%, oldBy%, oldPx%, oldPy%
-DIM INTEGER newPx%, newPy%
 
 ' ---- Beeps ----
 SUB BeepServe(): PLAY TONE 700,700 : PAUSE 40 : PLAY STOP : END SUB
@@ -81,14 +79,6 @@ END SUB
 
 SUB DrawBallAt(x%, y%)
   CIRCLE x%+br%, y%+br%, br%, 0, 1.0, , COL_BALL%
-END SUB
-
-SUB EraseBallAt(x%, y%)
-  CIRCLE x%+br%, y%+br%, br%+1, 0, 1.0, , COL_BG%
-END SUB
-
-SUB ErasePaddleAt(x%, y%)
-  BOX x%, y%, pw%, ph%, 0, , COL_BG%
 END SUB
 
 SUB InitBlocks()
@@ -129,7 +119,9 @@ SUB EraseBlock(r%, c%)
   LOCAL bx%, by%
   bx% = GetBlockX(c%)
   by% = GetBlockY(r%)
+  FRAMEBUFFER WRITE F
   BOX bx%, by%, BLOCK_W%, BLOCK_H%, 0, , COL_BG%
+  FRAMEBUFFER WRITE L  ' Restore to layer
 END SUB
 
 FUNCTION CheckBlockCollision(ballX%, ballY%, ballR%) AS INTEGER
@@ -182,15 +174,27 @@ lastAccelTime% = TIMER
 
 InitBlocks
 
-' Draw static background
+' ---- Setup Framebuffers ----
+FRAMEBUFFER CREATE           ' Create framebuffer F
+FRAMEBUFFER LAYER RGB(BLACK) ' Create layer L with black as transparent
+
+' Draw static background to F
+FRAMEBUFFER WRITE F
 DrawStatic
 DrawBlocks
 
-' Initial sprite positions
-oldBx% = INT(bx!) : oldBy% = INT(by!)
-oldPx% = INT(px!) : oldPy% = INT(py!)
-DrawPaddleAt oldPx%, oldPy%
-DrawBallAt oldBx%, oldBy%
+' Draw initial sprites to layer L
+FRAMEBUFFER WRITE L
+CLS RGB(BLACK)  ' Clear layer with transparent color
+DrawPaddleAt INT(px!), INT(py!)
+DrawBallAt INT(bx!), INT(by!)
+
+' Draw HUD to framebuffer F
+FRAMEBUFFER WRITE F
+DrawHUD
+
+' Start timed continuous merge (updates at TICK_MS rate)
+FRAMEBUFFER MERGE RGB(BLACK), R, TICK_MS
 
 BeepServe
 
@@ -278,30 +282,20 @@ DO
 
   ' ---- Win condition ----
   IF blocksLeft% = 0 THEN
+    FRAMEBUFFER MERGE RGB(BLACK), A  ' Abort continuous merge
+    FRAMEBUFFER CLOSE
+    FRAMEBUFFER WRITE N
     CLS COL_BG%
     PRINT "YOU WIN!  Score="; score%; "  Misses="; misses%
     END
   END IF
 
-  ' ---- Update positions ----
-  newPx% = INT(px!) : newPy% = INT(py!)
-
-  ' ---- Erase old positions ----
-  IF oldBx% <> INT(bx!) OR oldBy% <> INT(by!) THEN
-    EraseBallAt oldBx%, oldBy%
-  END IF
-
-  IF oldPx% <> newPx% OR oldPy% <> newPy% THEN
-    ErasePaddleAt oldPx%, oldPy%
-  END IF
-
-  ' ---- Draw new positions ----
-  DrawPaddleAt newPx%, newPy%
+  ' ---- Redraw layer with new sprite positions ----
+  FRAMEBUFFER SYNC
+  FRAMEBUFFER WRITE L
+  CLS RGB(BLACK)    ' Clear layer with transparent color
+  DrawPaddleAt INT(px!), INT(py!)
   DrawBallAt INT(bx!), INT(by!)
-
-  ' ---- Save current positions ----
-  oldBx% = INT(bx!) : oldBy% = INT(by!)
-  oldPx% = newPx% : oldPy% = newPy%
 
   ' ---- Update FPS display ----
   frames% = frames% + 1
@@ -309,13 +303,17 @@ DO
     fps$ = STR$(frames%) + " FPS"
     frames% = 0
     t0% = TIMER
+    FRAMEBUFFER WRITE F
     DrawHUD
   END IF
 
-  PAUSE TICK_MS
+  ' No PAUSE needed - continuous merge handles timing
 LOOP
 
 ' ---- Cleanup ----
+FRAMEBUFFER MERGE RGB(BLACK), A  ' Abort continuous merge
+FRAMEBUFFER CLOSE
+FRAMEBUFFER WRITE N  ' Back to normal screen
 CLS COL_BG%
 PRINT "Thanks!  Score="; score%; "  Misses="; misses%
 END
