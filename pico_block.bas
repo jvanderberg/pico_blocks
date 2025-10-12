@@ -126,6 +126,7 @@ DIM FLOAT hitPos!, angle!
 DIM INTEGER explosionActive%, explosionX%, explosionY%, explosionFrame%, explosionColor%
 DIM INTEGER oldScore%, oldLives%
 DIM INTEGER lastHitRow%, lastHitCol%, hitTimeout%
+DIM INTEGER screenshotNum%
 
 
 ' ---- Beeps ----
@@ -392,6 +393,7 @@ explosionActive% = 0
 hitTimeout% = 0
 lastHitRow% = -1
 lastHitCol% = -1
+screenshotNum% = 0
 
 frames% = 0 : t0% = TIMER
 fps$ = ""
@@ -425,7 +427,7 @@ BeepServe
 
 ' ---- Main loop ----
 DO
-  ' INPUT (Left=130, Right=131, ESC=27, Space=32; 1..8 tones)
+  ' INPUT (Left=130, Right=131, ESC=27, Space=32, P/p=80/112; 1..8 tones)
   k$ = INKEY$
   IF k$ <> "" THEN
     SELECT CASE ASC(k$)
@@ -433,6 +435,32 @@ DO
       CASE 131: pvx! = pvx! + PAD_ACCEL
       CASE  32: IF ballLaunched% = 0 THEN ballLaunched% = 1 : BeepServe
       CASE  27: EXIT DO
+      CASE 80, 112: ' P or p key - screenshot
+        ' Debug beeps to track progress
+        PLAY TONE 400,400 : PAUSE 40 : PLAY STOP  ' Starting
+        FRAMEBUFFER MERGE RGB(BLACK), A  ' Abort continuous merge
+        PAUSE 100
+        PLAY TONE 600,600 : PAUSE 40 : PLAY STOP  ' Merge aborted
+        ' Redraw everything to N buffer manually
+        FRAMEBUFFER WRITE N
+        CLS COL_BG%
+        DrawStatic
+        DrawBlocks
+        DrawHUD
+        DrawPaddleAt INT(px!), INT(py!)
+        DrawBallAt INT(bx!), INT(by!)
+        IF ballLaunched% = 0 THEN
+          TEXT W%\2, H%\2, "Hit SPACE to start", "CT", , , COL_TXT%, RGB(BLACK)
+        END IF
+        PAUSE 100
+        PLAY TONE 800,800 : PAUSE 40 : PLAY STOP  ' Redraw done
+        screenshotNum% = screenshotNum% + 1
+        SAVE IMAGE "screen" + STR$(screenshotNum%) + ".bmp"
+        PAUSE 100
+        PLAY TONE 1000,1000 : PAUSE 40 : PLAY STOP  ' Save complete
+        FRAMEBUFFER WRITE L  ' Back to layer
+        FRAMEBUFFER MERGE RGB(BLACK), R, TICK_MS  ' Resume continuous merge
+        PLAY TONE 1200,1200 : PAUSE 40 : PLAY STOP  ' Merge resumed
       CASE  49 TO 56
         PLAY TONE 220 * (2 ^ ((ASC(k$)-48)/12.0)), 0 : PAUSE 60 : PLAY STOP
     END SELECT
