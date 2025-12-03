@@ -5,7 +5,7 @@
 ' - FRAMEBUFFER MERGE for flicker-free display
 ' ==========================================
 OPTION EXPLICIT
-
+OPTION CONTINUATION LINES ON
 ' ---- Tunables ----
 CONST PAD_ACCEL = 2.0
 CONST PAD_DECAY = 0.88
